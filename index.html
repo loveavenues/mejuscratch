@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mejuscratch</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      display: flex; justify-content: center; align-items: center;
+      background: linear-gradient(180deg, #e8e8ff 0%, #f5f5ff 100%);
+      font-family: "Poppins", sans-serif;
+    }
+
+    .card-container {
+      position: relative;
+      width: min(85vw, 320px);
+      height: min(90vh, 540px);
+      transform-style: preserve-3d;
+      transition: transform 1s ease-in-out;
+    }
+    .card-container.flipped { transform: rotateY(180deg); }
+    .card-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
+
+    .scratch-card, .card-back {
+      position: absolute; width: 100%; height: 100%; backface-visibility: hidden;
+      border-radius: 22px; padding: clamp(14px, 4vw, 22px);
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      box-shadow: 0 8px 25px rgba(100, 100, 200, 0.18);
+      text-align: center; border: 4px solid #fff;
+    }
+
+    .scratch-card {
+      background: linear-gradient(180deg, #CCCCFF 0%, #e0d4ff 50%, #CCCCFF 100%);
+    }
+
+    h2 {
+      font-family: "Poppins", sans-serif;
+      font-size: clamp(16px, 4.5vw, 22px);
+      font-weight: 800; color: #4a3fa5; margin: 0;
+      letter-spacing: -0.3px;
+    }
+
+    .tagline {
+      font-family: "Poppins", sans-serif;
+      font-size: clamp(11px, 3vw, 13px);
+      font-weight: 500; color: #5c57b8;
+      background: rgba(255,255,255,0.75); border-radius: 12px;
+      padding: 4px 12px; margin-top: 8px; display: inline-block;
+    }
+
+    .scratch-area {
+      position: relative; width: 100%; flex-grow: 1; margin-top: 12px;
+      border-radius: 15px; overflow: hidden; background: #fff;
+      box-shadow: inset 0 0 12px rgba(100,100,200,0.12);
+      min-height: 0;
+    }
+
+    .scratch-area img {
+      width: 100%; height: 100%; border-radius: 12px; object-fit: cover; display: block;
+    }
+
+    canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      cursor: crosshair; border-radius: 12px; touch-action: none;
+    }
+
+    .flip-hint {
+      margin-top: 8px;
+      font-family: "Poppins", sans-serif;
+      font-size: clamp(11px, 3vw, 13px); font-weight: 600; color: #4a3fa5;
+      background: rgba(255,255,255,0.9); border-radius: 20px; padding: 7px 16px;
+      opacity: 0; transition: opacity 0.6s ease;
+      box-shadow: 0 2px 8px rgba(100,100,200,0.25); flex-shrink: 0;
+      /* clickable once visible */
+      cursor: pointer;
+      border: 2px solid #CCCCFF;
+    }
+    .flip-hint.visible { opacity: 1; }
+
+    /* BACK */
+    .card-back {
+      background: linear-gradient(180deg, #CCCCFF 0%, #b8b8f0 100%);
+      color: #2e2a6e; transform: rotateY(180deg);
+      justify-content: center; align-items: center;
+      cursor: pointer;
+    }
+    .back-note {
+      font-family: "Poppins", sans-serif;
+      font-size: clamp(13px, 3.5vw, 17px); font-weight: 600; color: #2e2a6e; line-height: 1.6;
+      background: rgba(255,255,255,0.5); border-radius: 15px;
+      padding: clamp(12px, 3vw, 18px); margin-bottom: 10px; width: 100%;
+    }
+    .back-sub {
+      font-family: "Poppins", sans-serif;
+      font-size: clamp(11px, 3vw, 13px); font-weight: 500; color: #4a3fa5;
+    }
+
+    /* debug bar — remove if you want */
+    #debugBar {
+      position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.45); color: #fff; font-size: 11px;
+      padding: 3px 10px; border-radius: 20px; font-family: monospace;
+      pointer-events: none; z-index: 999;
+    }
+  </style>
+</head>
+<body>
+  <div class="card-container" id="flipCard">
+    <div class="card-inner">
+
+      <!-- FRONT SIDE -->
+      <div class="scratch-card">
+        <h2>LOVE AT FIRST SCRATCH</h2>
+        <div class="tagline">A love secret is hidden inside. Scratch to reveal your surprise 👀</div>
+        <div class="scratch-area">
+          <img src="./45C17DA1-032C-450D-9B59-C3A37F8E2C1F.JPG" alt="Secret" id="hiddenImage" />
+          <canvas id="scratchCanvas"></canvas>
+        </div>
+        <div class="flip-hint" id="flipHint">✨ Tap here for more surprise!</div>
+      </div>
+
+      <!-- BACK SIDE -->
+      <div class="card-back" id="cardBack">
+        <div class="back-note">
+          i mean.... in this economy??????? YOU ARE MY MOST PRECIOUS TREASURE. 🩷
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="debugBar">scratched: 0%</div>
+
+  <script>
+    const canvas = document.getElementById("scratchCanvas");
+    const ctx = canvas.getContext("2d");
+    const flipCard = document.getElementById("flipCard");
+    const flipHint = document.getElementById("flipHint");
+    const cardBack = document.getElementById("cardBack");
+    const debugBar = document.getElementById("debugBar");
+
+    let scratchedEnough = false;
+    let autoFlipped = false;
+    let isDrawing = false;
+    let lastPos = null;
+
+    // Use device pixel ratio so canvas matches actual screen pixels
+    function resizeCanvas() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      // Fill with periwinkle scratch layer
+      const gradient = ctx.createLinearGradient(0, 0, rect.width, rect.height);
+      gradient.addColorStop(0, "#CCCCFF");
+      gradient.addColorStop(0.5, "#b8b8f0");
+      gradient.addColorStop(1, "#CCCCFF");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, rect.width, rect.height);
+
+      // Hint text on canvas
+      ctx.font = `bold ${Math.max(14, rect.width * 0.08)}px Poppins, sans-serif`;
+      ctx.fillStyle = "rgba(74, 63, 165, 0.6)";
+      ctx.textAlign = "center";
+      ctx.fillText("✦ Scratch here! ✦", rect.width / 2, rect.height / 2);
+    }
+
+    // Wait for layout then size canvas
+    window.addEventListener("load", resizeCanvas);
+    window.addEventListener("resize", resizeCanvas);
+    setTimeout(resizeCanvas, 100);
+
+    function getPos(event) {
+      const rect = canvas.getBoundingClientRect();
+      const src = event.touches ? event.touches[0] : event;
+      return {
+        x: src.clientX - rect.left,
+        y: src.clientY - rect.top
+      };
+    }
+
+    function doScratch(pos) {
+      ctx.globalCompositeOperation = "destination-out";
+      // Draw a thick line between last and current position for smooth stroke
+      if (lastPos) {
+        ctx.beginPath();
+        ctx.moveTo(lastPos.x, lastPos.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.lineWidth = 56;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 28, 0, Math.PI * 2);
+      ctx.fill();
+      lastPos = pos;
+      checkScratchProgress();
+    }
+
+    // Sample a grid of points instead of every pixel — much more reliable
+    function checkScratchProgress() {
+      if (scratchedEnough) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      const step = 8; // sample every 8 actual pixels
+      let cleared = 0;
+      let total = 0;
+      const data = ctx.getImageData(0, 0, w, h).data;
+      for (let y = 0; y < h; y += step) {
+        for (let x = 0; x < w; x += step) {
+          const idx = (y * w + x) * 4 + 3; // alpha channel
+          if (data[idx] < 128) cleared++;
+          total++;
+        }
+      }
+      const pct = Math.round((cleared / total) * 100);
+      debugBar.textContent = `scratched: ${pct}%`;
+
+      if (pct >= 60) {
+        scratchedEnough = true;
+        // Clear the rest
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        debugBar.textContent = "done! ✓";
+
+        // Show the hint button
+        flipHint.classList.add("visible");
+
+        // Auto flip after 1.8s
+        setTimeout(() => {
+          if (!autoFlipped) {
+            autoFlipped = true;
+            flipCard.classList.add("flipped");
+          }
+        }, 1800);
+      }
+    }
+
+    canvas.addEventListener("mousedown", (e) => { isDrawing = true; lastPos = null; doScratch(getPos(e)); });
+    canvas.addEventListener("mouseup", () => { isDrawing = false; lastPos = null; });
+    canvas.addEventListener("mouseleave", () => { isDrawing = false; lastPos = null; });
+    canvas.addEventListener("mousemove", (e) => { if (isDrawing) doScratch(getPos(e)); });
+
+    canvas.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      isDrawing = true; lastPos = null;
+      doScratch(getPos(e));
+    }, { passive: false });
+    canvas.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      isDrawing = false; lastPos = null;
+    }, { passive: false });
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      if (isDrawing) doScratch(getPos(e));
+    }, { passive: false });
+
+    // Flip button (hint pill)
+    flipHint.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (scratchedEnough) flipCard.classList.toggle("flipped");
+    });
+
+    // Tapping the back flips it back
+    cardBack.addEventListener("click", () => {
+      flipCard.classList.remove("flipped");
+    });
+  </script>
+</body>
+</html>
